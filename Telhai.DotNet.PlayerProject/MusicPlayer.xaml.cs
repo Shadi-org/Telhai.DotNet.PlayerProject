@@ -9,7 +9,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-using System.Text.RegularExpressions;
 
 using Microsoft.Win32;
 using System.IO;
@@ -28,15 +27,16 @@ namespace Telhai.DotNet.PlayerProject
     {
         public string MyProperty { get; set; } = "XXXX";
 
-
         private MediaPlayer mediaPlayer = new MediaPlayer();
         private DispatcherTimer timer = new DispatcherTimer();
         private List<MusicTrack> library = new List<MusicTrack>();
         private bool isDragging = false;
         private const string FILE_NAME = "library.json";
-        
-        // iTunes Service and cancellation support
+
+        // iTunes Service for API calls
         private readonly ItunesService _itunesService = new ItunesService();
+        
+        // CancellationTokenSource to cancel previous API requests when switching songs
         private CancellationTokenSource? _currentSearchCts;
 
         public MusicPlayer()
@@ -46,24 +46,59 @@ namespace Telhai.DotNet.PlayerProject
 
             this.Loaded += MusicPlayer_Loaded;
 
-
-            //this.MouseDoubleClick += MusicPlayer_MouseDoubleClick;
-            //this.MouseDoubleClick += new MouseButtonEventHandler(MusicPlayer_MouseDoubleClick);
-
             timer.Interval = TimeSpan.FromMilliseconds(500);
             timer.Tick += Timer_Tick;
 
-            LoadLibrary(); // <--- ADD THIS
+            LoadLibrary();
         }
 
         private void MusicPlayer_Loaded(object sender, RoutedEventArgs e)
         {
             LoadLibrary();
+            // Set default album art on load
+            SetDefaultAlbumArt();
         }
 
+        /// <summary>
+        /// Sets the default album art (clears the image, border background shows through)
+        /// </summary>
+        private void SetDefaultAlbumArt()
+        {
+            imgAlbumArt.Source = null;
+        }
 
+        /// <summary>
+        /// Single click on library item - shows song name and file path
+        /// </summary>
+        private void LstLibrary_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (lstLibrary.SelectedItem is MusicTrack track)
+            {
+                // Display song name and file path on single click
+                txtTrackName.Text = track.Title;
+                txtFilePath.Text = track.FilePath;
+                
+                // Clear API-related fields (will be populated on play)
+                txtArtistName.Text = "";
+                txtAlbumName.Text = "";
+                SetDefaultAlbumArt();
+            }
+        }
 
-        // --- EMPTY PLACEHOLDERS TO MAKE IT BUILD ---
+        /// <summary>
+        /// Double click on library item - plays the song and fetches metadata
+        /// </summary>
+        private void LstLibrary_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+        {
+            if (lstLibrary.SelectedItem is MusicTrack track)
+            {
+                PlayTrackAsync(track);
+            }
+        }
+
+        /// <summary>
+        /// Play button click - plays selected song and fetches metadata
+        /// </summary>
         private void BtnPlay_Click(object sender, RoutedEventArgs e)
         {
             if (lstLibrary.SelectedItem is MusicTrack track)
@@ -72,11 +107,126 @@ namespace Telhai.DotNet.PlayerProject
             }
             else if (mediaPlayer.Source != null)
             {
+                // Resume paused playback
                 mediaPlayer.Play();
                 timer.Start();
                 txtStatus.Text = "Playing";
             }
         }
+
+        /// <summary>
+        /// Plays the track and fetches iTunes metadata asynchronously
+        /// </summary>
+        private async void PlayTrackAsync(MusicTrack track)
+        {
+            // Start playing immediately - don't block UI
+            mediaPlayer.Open(new Uri(track.FilePath));
+            mediaPlayer.Play();
+            timer.Start();
+            txtCurrentSong.Text = track.Title;
+            txtStatus.Text = "Playing";
+
+            // Update basic info immediately
+            txtTrackName.Text = track.Title;
+            txtFilePath.Text = track.FilePath;
+            SetDefaultAlbumArt(); // Clear while loading
+
+            // Cancel any previous API request
+            _currentSearchCts?.Cancel();
+            _currentSearchCts = new CancellationTokenSource();
+            var cancellationToken = _currentSearchCts.Token;
+
+            // Fetch metadata from iTunes API asynchronously
+            await FetchAndDisplayMetadataAsync(track, cancellationToken);
+        }
+
+        /// <summary>
+        /// Fetches metadata from iTunes API and updates UI
+        /// </summary>
+        private async Task FetchAndDisplayMetadataAsync(MusicTrack track, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Parse search term from file name (artist - song or just song)
+                string searchTerm = ParseSearchTermFromFileName(track.Title);
+
+                txtStatus.Text = "Fetching metadata...";
+
+                // Call iTunes API asynchronously
+                var trackInfo = await _itunesService.SearchOneAsync(searchTerm, cancellationToken);
+
+                // Check if operation was cancelled
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (trackInfo != null)
+                {
+                    // Update UI with metadata from API
+                    txtTrackName.Text = trackInfo.TrackName ?? track.Title;
+                    txtArtistName.Text = trackInfo.ArtistName ?? "";
+                    txtAlbumName.Text = trackInfo.AlbumName ?? "";
+
+                    // Load album art - same approach as Tester.xaml
+                    if (!string.IsNullOrWhiteSpace(trackInfo.ArtworkUrl))
+                    {
+                        imgAlbumArt.Source = new BitmapImage(new Uri(trackInfo.ArtworkUrl));
+                    }
+                    else
+                    {
+                        SetDefaultAlbumArt();
+                    }
+
+                    txtStatus.Text = "Playing";
+                }
+                else
+                {
+                    // No results from API - show file info
+                    DisplayFileInfoOnly(track);
+                    txtStatus.Text = "Playing (no metadata found)";
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Request was cancelled (user switched songs) - do nothing
+            }
+            catch (Exception ex)
+            {
+                // Error fetching metadata - show file info only
+                DisplayFileInfoOnly(track);
+                txtStatus.Text = $"Playing (metadata error)";
+                System.Diagnostics.Debug.WriteLine($"iTunes API error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Parses search term from file name - handles "Artist - Song" or just "Song" format
+        /// </summary>
+        private string ParseSearchTermFromFileName(string fileName)
+        {
+            // Remove file extension if present
+            string name = System.IO.Path.GetFileNameWithoutExtension(fileName);
+
+            // Replace common separators with spaces for better search
+            // Handles formats like "Artist - Song", "Artist-Song", "Artist_Song"
+            name = name.Replace("-", " ").Replace("_", " ");
+
+            // Remove extra whitespace
+            name = string.Join(" ", name.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
+
+            return name;
+        }
+
+        /// <summary>
+        /// Displays only file information when API fails or returns no results
+        /// </summary>
+        private void DisplayFileInfoOnly(MusicTrack track)
+        {
+            txtTrackName.Text = System.IO.Path.GetFileNameWithoutExtension(track.FilePath);
+            txtArtistName.Text = "Unknown Artist";
+            txtAlbumName.Text = "Unknown Album";
+            txtFilePath.Text = track.FilePath;
+            SetDefaultAlbumArt();
+        }
+
         private void BtnPause_Click(object sender, RoutedEventArgs e)
         {
             mediaPlayer.Pause();
@@ -90,10 +240,12 @@ namespace Telhai.DotNet.PlayerProject
             sliderProgress.Value = 0;
             txtStatus.Text = "Stopped";
         }
+
         private void SliderVolume_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             mediaPlayer.Volume = sliderVolume.Value;
         }
+
         private void BtnAdd_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new OpenFileDialog();
@@ -125,136 +277,6 @@ namespace Telhai.DotNet.PlayerProject
                 SaveLibrary();
             }
         }
-        
-        // Single click - show file name and path only
-        private void LstLibrary_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (lstLibrary.SelectedItem is MusicTrack track)
-            {
-                // Display file info without playing
-                txtTrackName.Text = track.Title;
-                txtFilePath.Text = track.FilePath;
-                txtArtistName.Text = "-";
-                txtAlbumName.Text = "-";
-                txtApiStatus.Text = "Click PLAY or double-click to load song details";
-            }
-        }
-        
-        // Double click - play and fetch API data
-        private void LstLibrary_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        {
-            if (lstLibrary.SelectedItem is MusicTrack track)
-            {
-                PlayTrackAsync(track);
-            }
-        }
-        
-        // Async method to play track and fetch iTunes data
-        private async void PlayTrackAsync(MusicTrack track)
-        {
-            // Start playing immediately
-            mediaPlayer.Open(new Uri(track.FilePath));
-            mediaPlayer.Play();
-            timer.Start();
-            txtCurrentSong.Text = track.Title;
-            txtStatus.Text = "Playing";
-            txtFilePath.Text = track.FilePath;
-            
-            // Cancel any previous API request
-            _currentSearchCts?.Cancel();
-            _currentSearchCts = new CancellationTokenSource();
-            var token = _currentSearchCts.Token;
-            
-            // Reset display with defaults
-            txtTrackName.Text = track.Title;
-            txtArtistName.Text = "-";
-            txtAlbumName.Text = "-";
-            imgAlbumArt.Source = (ImageSource)Application.Current.Resources["DefaultAlbumCover"];
-            txtApiStatus.Text = "Searching iTunes...";
-            
-            try
-            {
-                // Parse search term from filename
-                string searchTerm = ParseSearchTermFromFilename(track.Title);
-                
-                // Fetch data from iTunes API (async, non-blocking)
-                var trackInfo = await _itunesService.SearchOneAsync(searchTerm, token);
-                
-                // Check if cancelled
-                if (token.IsCancellationRequested)
-                    return;
-                
-                if (trackInfo != null)
-                {
-                    // Update UI with API data
-                    txtTrackName.Text = trackInfo.TrackName ?? track.Title;
-                    txtArtistName.Text = trackInfo.ArtistName ?? "-";
-                    txtAlbumName.Text = trackInfo.AlbumName ?? "-";
-                    txtApiStatus.Text = "Data loaded from iTunes";
-                    
-                    // Load album artwork
-                    if (!string.IsNullOrEmpty(trackInfo.ArtworkUrl))
-                    {
-                        try
-                        {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.UriSource = new Uri(trackInfo.ArtworkUrl);
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.EndInit();
-                            imgAlbumArt.Source = bitmap;
-                        }
-                        catch
-                        {
-                            // Keep default image on error
-                        }
-                    }
-                }
-                else
-                {
-                    // No results from API - show file info
-                    txtTrackName.Text = track.Title;
-                    txtApiStatus.Text = "No iTunes data found";
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Request was cancelled - ignore
-            }
-            catch (Exception ex)
-            {
-                // Error occurred - show file info
-                txtTrackName.Text = track.Title;
-                txtArtistName.Text = "-";
-                txtAlbumName.Text = "-";
-                txtApiStatus.Text = $"Error: {ex.Message}";
-                imgAlbumArt.Source = (ImageSource)Application.Current.Resources["DefaultAlbumCover"];
-            }
-        }
-        
-        // Parse song name from filename (handles "Artist - Song" or "Song" formats)
-        private string ParseSearchTermFromFilename(string filename)
-        {
-            // Remove common file artifacts
-            string cleaned = filename.Trim();
-            
-            // Check for "Artist - Song" format (with hyphen separator)
-            if (cleaned.Contains(" - "))
-            {
-                // Keep both artist and song for better search results
-                return cleaned.Replace(" - ", " ");
-            }
-            
-            // Check for "Artist-Song" format (hyphen without spaces)
-            if (Regex.IsMatch(cleaned, @"^[^-]+-[^-]+$"))
-            {
-                return cleaned.Replace("-", " ");
-            }
-            
-            // Return as-is for simple song names
-            return cleaned;
-        }
-
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
@@ -276,7 +298,6 @@ namespace Telhai.DotNet.PlayerProject
             isDragging = false; // Resume timer updates
             mediaPlayer.Position = TimeSpan.FromSeconds(sliderProgress.Value);
         }
-
 
         private void UpdateLibraryUI()
         {
@@ -302,7 +323,6 @@ namespace Telhai.DotNet.PlayerProject
             }
         }
 
-
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
             Settings settingsWin = new Settings();
@@ -327,13 +347,5 @@ namespace Telhai.DotNet.PlayerProject
             UpdateLibraryUI();
             SaveLibrary();
         }
-
-
-        //private void MusicPlayer_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-        //{
-        //    MainWindow p = new MainWindow();
-        //    p.Title = "YYYY";
-        //    p.Show();
-        //}
     }
 }

@@ -4,44 +4,6 @@
              xmlns:local="clr-namespace:Telhai.DotNet.PlayerProject"
              StartupUri="MusicPlayer.xaml">
     <Application.Resources>
-        <!-- Default Album Cover Image -->
-        <DrawingImage x:Key="DefaultAlbumCover">
-            <DrawingImage.Drawing>
-                <DrawingGroup>
-                    <!-- Background -->
-                    <GeometryDrawing Brush="#444444">
-                        <GeometryDrawing.Geometry>
-                            <RectangleGeometry Rect="0,0,100,100"/>
-                        </GeometryDrawing.Geometry>
-                    </GeometryDrawing>
-                    <!-- Music Note Icon -->
-                    <GeometryDrawing Brush="#888888">
-                        <GeometryDrawing.Geometry>
-                            <EllipseGeometry Center="35,70" RadiusX="12" RadiusY="8"/>
-                        </GeometryDrawing.Geometry>
-                    </GeometryDrawing>
-                    <GeometryDrawing Brush="#888888">
-                        <GeometryDrawing.Geometry>
-                            <EllipseGeometry Center="65,65" RadiusX="12" RadiusY="8"/>
-                        </GeometryDrawing.Geometry>
-                    </GeometryDrawing>
-                    <GeometryDrawing Brush="#888888">
-                        <GeometryDrawing.Geometry>
-                            <RectangleGeometry Rect="45,25,4,45"/>
-                        </GeometryDrawing.Geometry>
-                    </GeometryDrawing>
-                    <GeometryDrawing Brush="#888888">
-                        <GeometryDrawing.Geometry>
-                            <RectangleGeometry Rect="75,20,4,45"/>
-                        </GeometryDrawing.Geometry>
-                    </GeometryDrawing>
-                    <GeometryDrawing Brush="#888888">
-                        <GeometryDrawing.Geometry>
-                            <RectangleGeometry Rect="45,20,34,6"/>
-                        </GeometryDrawing.Geometry>
-                    </GeometryDrawing>
-                </DrawingGroup>
-            </DrawingImage.Drawing>
-        </DrawingImage>
+         
     </Application.Resources>
 </Application>
