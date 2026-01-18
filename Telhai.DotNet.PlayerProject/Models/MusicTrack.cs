@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Telhai.DotNet.PlayerProject.Models
+namespace ShadiAbuJaber.DotNet.PlayerProject.Models
 {
     public class MusicTrack
     {

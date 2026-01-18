@@ -1,4 +1,4 @@
-namespace Telhai.DotNet.PlayerProject.Models
+namespace ShadiAbuJaber.DotNet.PlayerProject.Models
 {
     public class ItunesTrackInfo
     {

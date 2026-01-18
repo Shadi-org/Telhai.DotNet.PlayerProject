@@ -1,9 +1,9 @@
 using System;
 using System.Windows;
-using Telhai.DotNet.PlayerProject.Models;
-using Telhai.DotNet.PlayerProject.ViewModels;
+using ShadiAbuJaber.DotNet.PlayerProject.Models;
+using ShadiAbuJaber.DotNet.PlayerProject.ViewModels;
 
-namespace Telhai.DotNet.PlayerProject
+namespace ShadiAbuJaber.DotNet.PlayerProject
 {
     /// <summary>
     /// Interaction logic for SongEditorWindow.xaml

@@ -9,13 +9,13 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-using Telhai.DotNet.PlayerProject.Models;
-using Telhai.DotNet.PlayerProject.Services;
+using ShadiAbuJaber.DotNet.PlayerProject.Models;
+using ShadiAbuJaber.DotNet.PlayerProject.Services;
 using System.IO;
 
 
 
-namespace Telhai.DotNet.PlayerProject
+namespace ShadiAbuJaber.DotNet.PlayerProject
 {
     /// <summary>
     /// Interaction logic for Tester.xaml

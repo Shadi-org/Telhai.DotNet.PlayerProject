@@ -4,9 +4,9 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Microsoft.Win32;
-using Telhai.DotNet.PlayerProject.Models;
+using ShadiAbuJaber.DotNet.PlayerProject.Models;
 
-namespace Telhai.DotNet.PlayerProject.ViewModels
+namespace ShadiAbuJaber.DotNet.PlayerProject.ViewModels
 {
     public class SongEditorViewModel : INotifyPropertyChanged
     {

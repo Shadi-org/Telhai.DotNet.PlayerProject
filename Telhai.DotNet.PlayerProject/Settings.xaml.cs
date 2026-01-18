@@ -10,9 +10,9 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Telhai.DotNet.PlayerProject.Models;
+using ShadiAbuJaber.DotNet.PlayerProject.Models;
 
-namespace Telhai.DotNet.PlayerProject
+namespace ShadiAbuJaber.DotNet.PlayerProject
 {
     /// <summary>
     /// Interaction logic for Setting.xaml

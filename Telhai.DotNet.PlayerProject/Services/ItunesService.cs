@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using Telhai.DotNet.PlayerProject.Models;
+using ShadiAbuJaber.DotNet.PlayerProject.Models;
 
-namespace Telhai.DotNet.PlayerProject.Services
+namespace ShadiAbuJaber.DotNet.PlayerProject.Services
 {
     public class ItunesService
     {

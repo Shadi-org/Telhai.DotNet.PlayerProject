@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace Telhai.DotNet.PlayerProject.Models
+namespace ShadiAbuJaber.DotNet.PlayerProject.Models
 {
     public class ItunesSearchResponse
     {

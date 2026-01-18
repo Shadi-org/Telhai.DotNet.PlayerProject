@@ -14,11 +14,11 @@ using Microsoft.Win32;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Threading;
-using Telhai.DotNet.PlayerProject.Models;
-using Telhai.DotNet.PlayerProject.Services;
+using ShadiAbuJaber.DotNet.PlayerProject.Models;
+using ShadiAbuJaber.DotNet.PlayerProject.Services;
 
 
-namespace Telhai.DotNet.PlayerProject
+namespace ShadiAbuJaber.DotNet.PlayerProject
 {
     /// <summary>
     /// Interaction logic for MusicPlayer.xaml

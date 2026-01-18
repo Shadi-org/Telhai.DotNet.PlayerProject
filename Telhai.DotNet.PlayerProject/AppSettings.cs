@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.IO;
 
-namespace Telhai.DotNet.PlayerProject
+namespace ShadiAbuJaber.DotNet.PlayerProject
 {
     public class AppSettings
     {
