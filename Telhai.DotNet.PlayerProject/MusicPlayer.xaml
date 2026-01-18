@@ -91,11 +91,15 @@
                      MouseDoubleClick="LstLibrary_MouseDoubleClick"
                      SelectionChanged="LstLibrary_SelectionChanged"/>
 
-            <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
-                <Button Content="Add MP3" Click="BtnAdd_Click" Width="80" Margin="2"/>
-                <Button Content="Remove" Click="BtnRemove_Click" Width="80" Margin="2"/>
-
-                <Button Content="Settings" Click="BtnSettings_Click" Width="80" Margin="2" Background="#555" Foreground="White"/>
+            <StackPanel Grid.Row="2" Margin="0,10,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Content="Add MP3" Click="BtnAdd_Click" Width="70" Margin="2"/>
+                    <Button Content="Remove" Click="BtnRemove_Click" Width="70" Margin="2"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,5,0,0">
+                    <Button Content="Edit" Click="BtnEdit_Click" Width="70" Margin="2" Background="#007ACC" Foreground="White"/>
+                    <Button Content="Settings" Click="BtnSettings_Click" Width="70" Margin="2" Background="#555" Foreground="White"/>
+                </StackPanel>
             </StackPanel>
         </Grid>
     </Grid>

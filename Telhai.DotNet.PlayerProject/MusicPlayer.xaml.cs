@@ -39,6 +39,11 @@ namespace Telhai.DotNet.PlayerProject
         // CancellationTokenSource to cancel previous API requests when switching songs
         private CancellationTokenSource? _currentSearchCts;
 
+        // Timer for rotating album art images during playback
+        private DispatcherTimer? _imageRotationTimer;
+        private int _currentImageIndex = 0;
+        private MusicTrack? _currentPlayingTrack;
+
         public MusicPlayer()
         {
             //--init all Hardcoded xaml into Elements Tree
@@ -48,6 +53,11 @@ namespace Telhai.DotNet.PlayerProject
 
             timer.Interval = TimeSpan.FromMilliseconds(500);
             timer.Tick += Timer_Tick;
+
+            // Initialize image rotation timer (rotates every 3 seconds)
+            _imageRotationTimer = new DispatcherTimer();
+            _imageRotationTimer.Interval = TimeSpan.FromSeconds(3);
+            _imageRotationTimer.Tick += ImageRotationTimer_Tick;
 
             LoadLibrary();
         }
@@ -60,6 +70,37 @@ namespace Telhai.DotNet.PlayerProject
         }
 
         /// <summary>
+        /// Timer tick for rotating album art images
+        /// </summary>
+        private void ImageRotationTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_currentPlayingTrack != null && _currentPlayingTrack.ArtworkUrls.Count > 1)
+            {
+                _currentImageIndex = (_currentImageIndex + 1) % _currentPlayingTrack.ArtworkUrls.Count;
+                DisplayImageAtIndex(_currentImageIndex);
+            }
+        }
+
+        /// <summary>
+        /// Displays the image at the specified index from current track's artwork
+        /// </summary>
+        private void DisplayImageAtIndex(int index)
+        {
+            if (_currentPlayingTrack != null && index >= 0 && index < _currentPlayingTrack.ArtworkUrls.Count)
+            {
+                string artworkUrl = _currentPlayingTrack.ArtworkUrls[index];
+                try
+                {
+                    imgAlbumArt.Source = new BitmapImage(new Uri(artworkUrl, UriKind.RelativeOrAbsolute));
+                }
+                catch
+                {
+                    SetDefaultAlbumArt();
+                }
+            }
+        }
+
+        /// <summary>
         /// Sets the default album art (clears the image, border background shows through)
         /// </summary>
         private void SetDefaultAlbumArt()
@@ -68,20 +109,46 @@ namespace Telhai.DotNet.PlayerProject
         }
 
         /// <summary>
-        /// Single click on library item - shows song name and file path
+        /// Single click on library item - shows song name and cached metadata if available
         /// </summary>
         private void LstLibrary_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (lstLibrary.SelectedItem is MusicTrack track)
             {
-                // Display song name and file path on single click
+                // Display song name and file path
                 txtTrackName.Text = track.Title;
                 txtFilePath.Text = track.FilePath;
                 
-                // Clear API-related fields (will be populated on play)
-                txtArtistName.Text = "";
-                txtAlbumName.Text = "";
-                SetDefaultAlbumArt();
+                // Display cached metadata if available (no API call)
+                if (track.HasCachedMetadata)
+                {
+                    txtArtistName.Text = track.ArtistName ?? "";
+                    txtAlbumName.Text = track.AlbumName ?? "";
+                    
+                    // Display first artwork if available
+                    if (track.ArtworkUrls.Count > 0)
+                    {
+                        try
+                        {
+                            imgAlbumArt.Source = new BitmapImage(new Uri(track.ArtworkUrls[0], UriKind.RelativeOrAbsolute));
+                        }
+                        catch
+                        {
+                            SetDefaultAlbumArt();
+                        }
+                    }
+                    else
+                    {
+                        SetDefaultAlbumArt();
+                    }
+                }
+                else
+                {
+                    // No cached metadata - clear API-related fields
+                    txtArtistName.Text = "";
+                    txtAlbumName.Text = "";
+                    SetDefaultAlbumArt();
+                }
             }
         }
 
@@ -110,15 +177,27 @@ namespace Telhai.DotNet.PlayerProject
                 // Resume paused playback
                 mediaPlayer.Play();
                 timer.Start();
+                
+                // Resume image rotation if track has multiple images
+                if (_currentPlayingTrack != null && _currentPlayingTrack.ArtworkUrls.Count > 1)
+                {
+                    _imageRotationTimer?.Start();
+                }
+                
                 txtStatus.Text = "Playing";
             }
         }
 
         /// <summary>
-        /// Plays the track and fetches iTunes metadata asynchronously
+        /// Plays the track and uses cached metadata or fetches from iTunes API
         /// </summary>
         private async void PlayTrackAsync(MusicTrack track)
         {
+            // Stop previous image rotation
+            _imageRotationTimer?.Stop();
+            _currentPlayingTrack = track;
+            _currentImageIndex = 0;
+
             // Start playing immediately - don't block UI
             mediaPlayer.Open(new Uri(track.FilePath));
             mediaPlayer.Play();
@@ -129,19 +208,60 @@ namespace Telhai.DotNet.PlayerProject
             // Update basic info immediately
             txtTrackName.Text = track.Title;
             txtFilePath.Text = track.FilePath;
-            SetDefaultAlbumArt(); // Clear while loading
 
-            // Cancel any previous API request
-            _currentSearchCts?.Cancel();
-            _currentSearchCts = new CancellationTokenSource();
-            var cancellationToken = _currentSearchCts.Token;
+            // Check if metadata is already cached
+            if (track.HasCachedMetadata)
+            {
+                // Use cached metadata - no API call needed
+                DisplayCachedMetadata(track);
+                txtStatus.Text = "Playing";
+            }
+            else
+            {
+                // Clear while loading
+                SetDefaultAlbumArt();
+                txtArtistName.Text = "";
+                txtAlbumName.Text = "";
 
-            // Fetch metadata from iTunes API asynchronously
-            await FetchAndDisplayMetadataAsync(track, cancellationToken);
+                // Cancel any previous API request
+                _currentSearchCts?.Cancel();
+                _currentSearchCts = new CancellationTokenSource();
+                var cancellationToken = _currentSearchCts.Token;
+
+                // Fetch metadata from iTunes API asynchronously
+                await FetchAndDisplayMetadataAsync(track, cancellationToken);
+            }
         }
 
         /// <summary>
-        /// Fetches metadata from iTunes API and updates UI
+        /// Displays cached metadata and starts image rotation if multiple images
+        /// </summary>
+        private void DisplayCachedMetadata(MusicTrack track)
+        {
+            txtTrackName.Text = track.Title;
+            txtArtistName.Text = track.ArtistName ?? "";
+            txtAlbumName.Text = track.AlbumName ?? "";
+            txtFilePath.Text = track.FilePath;
+
+            // Display first image
+            if (track.ArtworkUrls.Count > 0)
+            {
+                DisplayImageAtIndex(0);
+                
+                // Start rotation timer if multiple images
+                if (track.ArtworkUrls.Count > 1)
+                {
+                    _imageRotationTimer?.Start();
+                }
+            }
+            else
+            {
+                SetDefaultAlbumArt();
+            }
+        }
+
+        /// <summary>
+        /// Fetches metadata from iTunes API, updates UI, and caches to JSON
         /// </summary>
         private async Task FetchAndDisplayMetadataAsync(MusicTrack track, CancellationToken cancellationToken)
         {
@@ -160,20 +280,28 @@ namespace Telhai.DotNet.PlayerProject
 
                 if (trackInfo != null)
                 {
-                    // Update UI with metadata from API
-                    txtTrackName.Text = trackInfo.TrackName ?? track.Title;
-                    txtArtistName.Text = trackInfo.ArtistName ?? "";
-                    txtAlbumName.Text = trackInfo.AlbumName ?? "";
-
-                    // Load album art - same approach as Tester.xaml
+                    // Update track with metadata from API (cache it)
+                    track.Title = trackInfo.TrackName ?? track.Title;
+                    track.ArtistName = trackInfo.ArtistName;
+                    track.AlbumName = trackInfo.AlbumName;
+                    
+                    // Store artwork URL in collection
                     if (!string.IsNullOrWhiteSpace(trackInfo.ArtworkUrl))
                     {
-                        imgAlbumArt.Source = new BitmapImage(new Uri(trackInfo.ArtworkUrl));
+                        track.ArtworkUrls.Clear();
+                        track.ArtworkUrls.Add(trackInfo.ArtworkUrl);
                     }
-                    else
-                    {
-                        SetDefaultAlbumArt();
-                    }
+                    
+                    track.HasCachedMetadata = true;
+
+                    // Save to JSON file
+                    SaveLibrary();
+
+                    // Update UI with metadata
+                    DisplayCachedMetadata(track);
+                    
+                    // Refresh library display to show updated title
+                    UpdateLibraryUI();
 
                     txtStatus.Text = "Playing";
                 }
@@ -230,6 +358,7 @@ namespace Telhai.DotNet.PlayerProject
         private void BtnPause_Click(object sender, RoutedEventArgs e)
         {
             mediaPlayer.Pause();
+            _imageRotationTimer?.Stop(); // Stop image rotation when paused
             txtStatus.Text = "Paused";
         }
 
@@ -237,6 +366,7 @@ namespace Telhai.DotNet.PlayerProject
         {
             mediaPlayer.Stop();
             timer.Stop();
+            _imageRotationTimer?.Stop(); // Stop image rotation when stopped
             sliderProgress.Value = 0;
             txtStatus.Text = "Stopped";
         }
@@ -275,6 +405,55 @@ namespace Telhai.DotNet.PlayerProject
                 library.Remove(track);
                 UpdateLibraryUI();
                 SaveLibrary();
+            }
+        }
+
+        /// <summary>
+        /// Opens the Song Editor window for the selected track
+        /// </summary>
+        private void BtnEdit_Click(object sender, RoutedEventArgs e)
+        {
+            if (lstLibrary.SelectedItem is MusicTrack track)
+            {
+                SongEditorWindow editor = new SongEditorWindow(track);
+                editor.Owner = this;
+                
+                // Subscribe to save event
+                editor.OnTrackSaved += Editor_OnTrackSaved;
+                
+                editor.ShowDialog();
+            }
+            else
+            {
+                MessageBox.Show("Please select a song to edit.", "No Song Selected", 
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        /// <summary>
+        /// Handles the track saved event from the editor
+        /// </summary>
+        private void Editor_OnTrackSaved(MusicTrack track)
+        {
+            // Save the updated library to JSON
+            SaveLibrary();
+            
+            // Refresh UI
+            UpdateLibraryUI();
+            
+            // If this is the currently playing track, update display
+            if (_currentPlayingTrack == track)
+            {
+                DisplayCachedMetadata(track);
+            }
+            else
+            {
+                // Re-select to refresh display
+                int index = library.IndexOf(track);
+                if (index >= 0)
+                {
+                    lstLibrary.SelectedIndex = index;
+                }
             }
         }
 
